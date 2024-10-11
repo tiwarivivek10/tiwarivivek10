@@ -1,0 +1,122 @@
+import cv2
+import mediapipe as mp
+import numpy as np
+
+# Initialize MediaPipe Pose and drawing utilities
+mp_pose = mp.solutions.pose
+mp_drawing = mp.solutions.drawing_utils
+
+# Initialize the camera capture
+cap = cv2.VideoCapture(0)
+
+# Function to draw a stick figure character imitating human pose
+def draw_stick_figure(image, landmarks, scale=1.0):
+    height, width, _ = image.shape
+    # Define connections to simulate stick figure joints
+    stick_connections = [(11, 13), (13, 15),  # Left arm
+                         (12, 14), (14, 16),  # Right arm
+                         (11, 12),  # Shoulders
+                         (23, 24),  # Hips
+                         (23, 25), (25, 27),  # Left leg
+                         (24, 26), (26, 28)]  # Right leg
+
+    # Convert landmarks to 2D points
+    points = []
+    for lm in landmarks:
+        points.append((int(lm.x * width), int(lm.y * height)))
+
+    # Draw the stick figure using the connections
+    for start_idx, end_idx in stick_connections:
+        cv2.line(image, points[start_idx], points[end_idx], (0, 255, 0), int(4 * scale))
+
+# Function to draw a simple cartoon robot figure that mimics the detected pose
+def draw_robot(image, landmarks):
+    height, width, _ = image.shape
+    # Define the main points of the robot (head, torso, arms, and legs)
+    robot_points = [(11, 13), (13, 15),  # Left arm
+                    (12, 14), (14, 16),  # Right arm
+                    (11, 12),  # Shoulders
+                    (23, 24),  # Hips
+                    (23, 25), (25, 27),  # Left leg
+                    (24, 26), (26, 28)]  # Right leg
+
+    # Convert landmarks to 2D points for robot
+    points = []
+    for lm in landmarks:
+        points.append((int(lm.x * width), int(lm.y * height)))
+
+    # Draw a simple "robot-like" figure (head, torso, arms, legs)
+    for start_idx, end_idx in robot_points:
+        cv2.line(image, points[start_idx], points[end_idx], (255, 0, 0), 10)
+
+    # Draw a circular head for the robot
+    head_center = (points[0][0], points[0][1] - 50)  # Use shoulders for head position
+    cv2.circle(image, head_center, 50, (255, 255, 0), -1)
+
+# Function to simulate breathing effect for the robot
+def breathing_effect(image, landmarks, scale=1.0):
+    height, width, _ = image.shape
+    stick_connections = [(11, 13), (13, 15),  # Left arm
+                         (12, 14), (14, 16),  # Right arm
+                         (11, 12),  # Shoulders
+                         (23, 24),  # Hips
+                         (23, 25), (25, 27),  # Left leg
+                         (24, 26), (26, 28)]  # Right leg
+
+    points = []
+    for lm in landmarks:
+        points.append((int(lm.x * width), int(lm.y * height)))
+
+    for start_idx, end_idx in stick_connections:
+        cv2.line(image, points[start_idx], points[end_idx], (0, 255, 0), int(4 * scale))
+
+# Start Pose detection
+with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
+    breathing_scale = 1.0  # Scale factor for breathing effect
+    scale_direction = 1  # To increase or decrease breathing scale
+
+    while cap.isOpened():
+        ret, frame = cap.read()
+
+        if not ret:
+            break
+
+        # Convert the frame to RGB as MediaPipe works with RGB
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+        # Process the frame and detect pose landmarks
+        results = pose.process(frame_rgb)
+
+        # Create a blank canvas for the robot cartoon
+        robot_frame = np.ones_like(frame) * 255  # White background
+
+        # If pose landmarks are detected, extract and draw them
+        if results.pose_landmarks:
+            # Draw the detected pose landmarks in the first window (stick figure)
+            mp_drawing.draw_landmarks(frame, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
+
+            # Draw the stick figure based on detected landmarks in the first window
+            draw_stick_figure(frame, results.pose_landmarks.landmark)
+
+            # Draw the robot mimicking the same pose in the second window
+            draw_robot(robot_frame, results.pose_landmarks.landmark)
+
+            # Simulate the breathing effect for the robot (size changing)
+            breathing_effect(frame, results.pose_landmarks.landmark, scale=breathing_scale)
+            breathing_scale += 0.01 * scale_direction
+            if breathing_scale > 1.2 or breathing_scale < 0.8:
+                scale_direction *= -1  # Reverse the breathing direction
+
+        # Display the first window with the stick figure
+        cv2.imshow('Pose Imitation', frame)
+
+        # Display the second window with the robot cartoon
+        cv2.imshow('Robot Cartoon Pose', robot_frame)
+
+        # Break the loop when 'q' is pressed
+        if cv2.waitKey(10) & 0xFF == ord('q'):
+            break
+
+# Release the capture and close windows
+cap.release()
+cv2.destroyAllWindows(
